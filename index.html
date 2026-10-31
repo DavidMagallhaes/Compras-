@@ -39,6 +39,10 @@ input:focus{outline:2px solid var(--ac);border-color:transparent}
 .item .n span{color:var(--mu);font-size:13px}
 .item .s{font-weight:700}
 .x{border:0;background:none;color:var(--rd);font-size:22px;padding:4px 8px}
+[hidden]{display:none!important}
+.ed{color:var(--ac)}
+summary small{font-weight:400}
+.del{border:1px solid var(--rd)!important;margin-top:8px;padding:12px!important}
 .empty{color:var(--mu);text-align:center;padding:14px 0}
 .mon{margin-bottom:14px}
 .mon .top{display:flex;justify-content:space-between;font-weight:600;margin-bottom:4px}
@@ -63,16 +67,20 @@ h2{font-size:16px;margin:0 0 10px}
 <section id="v1">
   <div class="card total"><small>Total até agora</small><div class="v" id="tot">R$ 0,00</div><small id="cnt">0 itens</small></div>
   <div class="card">
-    <input id="nome" placeholder="Item (ex.: arroz)" autocomplete="off" style="margin-bottom:8px">
+    <datalist id="nomes"></datalist>
+    <input id="nome" list="nomes" placeholder="Item (ex.: arroz)" autocomplete="off" style="margin-bottom:8px">
     <div class="row">
       <input id="qtd" class="q" inputmode="decimal" placeholder="Qtd" value="1">
       <input id="prc" class="p" inputmode="decimal" placeholder="Valor unitário (R$)">
     </div>
     <button class="btn" id="add">+ Adicionar</button>
+    <button class="btn ghost" id="canc" hidden style="color:var(--mu)">Cancelar edição</button>
   </div>
   <div class="card" id="lista"></div>
   <div class="card">
     <input id="mkt" placeholder="Mercado (opcional)" style="margin-bottom:8px">
+    <label class="mu" style="display:block;font-size:13px;margin:0 0 4px">Mês de referência desta compra</label>
+    <input id="mes" type="month" style="margin-bottom:8px">
     <button class="btn" id="fin">✔ Finalizar e salvar compra</button>
     <button class="btn ghost" id="lim">Limpar lista</button>
   </div>
@@ -80,6 +88,7 @@ h2{font-size:16px;margin:0 0 10px}
 
 <section id="v2" hidden>
   <div class="card"><h2>Comparação por mês</h2><div id="meses"></div></div>
+  <div class="card"><h2>Preço por item</h2><input id="busca" placeholder="Buscar item…" style="margin-bottom:8px"><div id="itens"></div></div>
   <div class="card"><h2>Compras salvas</h2><div id="hist"></div></div>
 </section>
 </main>
@@ -89,7 +98,7 @@ h2{font-size:16px;margin:0 0 10px}
 var KC='mercado_cart_v1',KH='mercado_hist_v1';
 function load(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):[]}catch(e){return []}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-var cart=load(KC),hist=load(KH);
+var cart=load(KC),hist=load(KH),ed=-1,armed=null;
 var $=function(id){return document.getElementById(id)};
 var brl=function(n){return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})};
 var num=function(s){var n=parseFloat(String(s).replace(/\./g,function(m,i,t){return t.indexOf(',')>-1?'':'.'}).replace(',','.'));return isNaN(n)?0:n};
@@ -102,7 +111,7 @@ function renderCart(){
   $('tot').textContent=brl(sum(cart));
   $('cnt').textContent=cart.length+(cart.length===1?' item':' itens');
   $('lista').innerHTML=cart.length?cart.map(function(i,x){
-    return '<div class="item"><div class="n"><b>'+esc(i.n)+'</b><span>'+i.q+' × '+brl(i.p)+'</span></div><div class="s">'+brl(i.q*i.p)+'</div><button class="x" data-x="'+x+'" aria-label="Remover">×</button></div>';
+    return '<div class="item"><div class="n"><b>'+esc(i.n)+'</b><span>'+i.q+' × '+brl(i.p)+'</span></div><div class="s">'+brl(i.q*i.p)+'</div><button class="x ed" data-e="'+x+'" aria-label="Editar">✎</button><button class="x" data-x="'+x+'" aria-label="Remover">×</button></div>';
   }).reverse().join(''):'<div class="empty">Nenhum item ainda. Comece lançando abaixo ☝️</div>';
 }
 function renderHist(){
@@ -117,31 +126,79 @@ function renderHist(){
       if(df===0)d='<span class="mu">igual ao mês anterior</span>';}
     return '<div class="mon"><div class="top"><span>'+mlabel(k)+'</span><span>'+brl(by[k].t)+'</span></div><div class="bar"><i style="width:'+(by[k].t/max*100)+'%"></i></div><div class="d">'+by[k].n+(by[k].n===1?' compra · ':' compras · ')+d+'</div></div>';
   }).join(''):'<div class="empty">Salve uma compra para ver a comparação.</div>';
-  $('hist').innerHTML=hist.length?hist.slice().reverse().map(function(h){
-    var id=h.id,dt=new Date(h.d).toLocaleDateString('pt-BR');
-    return '<details><summary><span>'+dt+(h.m?' · '+esc(h.m):'')+'</span><span>'+brl(h.total)+'</span></summary><div class="sub">'+
+  $('hist').innerHTML=hist.length?hist.slice().reverse().map(function(h,ix,ar){
+    var pv=ar[ix+1],dl='';
+    if(pv&&pv.total){var df=h.total-pv.total,pc=Math.abs(df/pv.total*100).toFixed(1).replace('.',',');
+      dl='<br><small class="'+(df>0?'up':df<0?'dn':'mu')+'">'+(df===0?'igual à compra anterior':(df>0?'▲ ':'▼ ')+brl(Math.abs(df))+' ('+pc+'%) vs. compra anterior')+'</small>'}
+    var id=h.id,rm=(h.r||h.d).slice(0,7),dm=h.d.slice(0,7),dt=new Date(h.r||h.d).toLocaleDateString('pt-BR')+(rm!==dm?' (ref. '+mlabel(dm)+')':'');
+    return '<details><summary><span>'+dt+(h.m?' · '+esc(h.m):'')+dl+'</span><span>'+brl(h.total)+'</span></summary><div class="sub"><div><span>Mês de referência</span><input type="month" data-m="'+id+'" value="'+dm+'" style="width:auto"></div>'+
       h.items.map(function(i){return '<div><span>'+esc(i.n)+' ('+i.q+'×'+brl(i.p)+')</span><span>'+brl(i.q*i.p)+'</span></div>'}).join('')+
-      '<button class="btn ghost" data-h="'+id+'">Excluir compra</button></div></details>';
+      '<button class="btn ghost del" data-h="'+id+'">Excluir compra</button></div></details>';
   }).join(''):'<div class="empty">Nenhuma compra salva ainda.</div>';
+  renderItens();
+}
+function norm(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()}
+function renderItens(){
+  var f=norm($('busca').value),map={};
+  hist.forEach(function(h){var k=h.d.slice(0,7);h.items.forEach(function(i){
+    var n=norm(i.n),o=map[n]=map[n]||{name:i.n,m:{}};o.name=i.n;
+    var m=o.m[k]=o.m[k]||{v:0,q:0};m.v+=i.q*i.p;m.q+=i.q})});
+  $('nomes').innerHTML=Object.keys(map).map(function(n){return '<option value="'+esc(map[n].name)+'">'}).join('');
+  var rows=Object.keys(map).filter(function(n){return !f||n.indexOf(f)>-1}).map(function(n){
+    var o=map[n],ks=Object.keys(o.m).sort(),pr=function(k){return o.m[k].v/o.m[k].q};
+    var last=pr(ks[ks.length-1]),r={o:o,ks:ks,pr:pr,last:last,pc:null,df:0};
+    if(ks.length>1){var pv=pr(ks[ks.length-2]);r.df=last-pv;r.pc=pv?r.df/pv*100:0}
+    return r});
+  rows.sort(function(a,b){
+    if((a.pc===null)!==(b.pc===null))return a.pc===null?1:-1;
+    if(a.pc!==null)return Math.abs(b.pc)-Math.abs(a.pc);
+    return a.o.name.localeCompare(b.o.name)});
+  $('itens').innerHTML=rows.length?rows.map(function(r){
+    var tag=r.pc===null?'<span class="mu">só '+mlabel(r.ks[0]).split(' de ')[0]+'</span>':
+      '<span class="'+(r.df>0?'up':r.df<0?'dn':'mu')+'">'+(r.df>0?'▲ ':r.df<0?'▼ ':'')+Math.abs(r.pc).toFixed(1).replace('.',',')+'%</span>';
+    return '<details><summary><span>'+esc(r.o.name)+'<br><small class="mu">'+brl(r.last)+' (média no último mês)</small></span><span>'+tag+'</span></summary><div class="sub">'+
+      r.ks.slice().reverse().map(function(k,j,a){
+        var p=r.pr(k),nx=a[j+1],d='';
+        if(nx){var df=p-r.pr(nx);d=df===0?' =':' <span class="'+(df>0?'up':'dn')+'">'+(df>0?'▲ ':'▼ ')+brl(Math.abs(df))+'</span>'}
+        return '<div><span>'+mlabel(k)+' ('+(+r.o.m[k].q.toFixed(2))+' un.)</span><span>'+brl(p)+d+'</span></div>'}).join('')+
+      '</div></details>'}).join(''):'<div class="empty">'+(f?'Nenhum item encontrado.':'Salve uma compra para comparar preços.')+'</div>';
 }
 function add(){
   var n=$('nome').value.trim(),q=num($('qtd').value),p=num($('prc').value);
   if(!n||q<=0||p<=0){(!n?$('nome'):q<=0?$('qtd'):$('prc')).focus();return}
-  cart.push({n:n,q:q,p:p});save(KC,cart);
-  $('nome').value='';$('prc').value='';$('qtd').value='1';$('nome').focus();renderCart();
+  if(ed>=0&&cart[ed])cart[ed]={n:n,q:q,p:p};else cart.push({n:n,q:q,p:p});
+  save(KC,cart);resetEd();$('nome').focus();renderCart();
 }
+function resetEd(){ed=-1;$('nome').value='';$('prc').value='';$('qtd').value='1';$('add').textContent='+ Adicionar';$('canc').hidden=true}
 $('add').onclick=add;
 ['nome','qtd','prc'].forEach(function(id){$(id).addEventListener('keydown',function(e){if(e.key==='Enter')add()})});
-$('lista').onclick=function(e){var x=e.target.getAttribute('data-x');if(x!==null){cart.splice(+x,1);save(KC,cart);renderCart()}};
-$('lim').onclick=function(){if(cart.length&&confirm('Limpar a lista atual?')){cart=[];save(KC,cart);renderCart()}};
+$('lista').onclick=function(e){
+  var x=e.target.getAttribute('data-x'),y=e.target.getAttribute('data-e');
+  if(x!==null){cart.splice(+x,1);save(KC,cart);resetEd();renderCart()}
+  if(y!==null){var i=cart[+y];ed=+y;$('nome').value=i.n;$('qtd').value=String(i.q).replace('.',',');$('prc').value=String(i.p).replace('.',',');$('add').textContent='✔ Salvar alteração';$('canc').hidden=false;window.scrollTo(0,0);$('prc').focus()}
+};
+$('canc').onclick=resetEd;
+function twoStep(btn,key,label,fn){
+  if(armed===key){armed=null;fn();return}
+  armed=key;btn.textContent='Toque de novo para confirmar';
+  setTimeout(function(){if(armed===key){armed=null;btn.textContent=label}},4000);
+}
+$('lim').onclick=function(){if(cart.length)twoStep($('lim'),'lim','Limpar lista',function(){cart=[];save(KC,cart);resetEd();renderCart();$('lim').textContent='Limpar lista'})};
 $('fin').onclick=function(){
   if(!cart.length)return;
   var now=new Date(),d=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T12:00:00';
-  hist.push({id:String(Date.now()),d:d,m:$('mkt').value.trim(),items:cart,total:sum(cart)});
-  save(KH,hist);cart=[];save(KC,cart);$('mkt').value='';renderCart();renderHist();show(2);
+  var mes=$('mes').value||curMonth();
+  hist.push({id:String(Date.now()),d:mes+'-01T12:00:00',r:d,m:$('mkt').value.trim(),items:cart,total:sum(cart)});
+  save(KH,hist);cart=[];save(KC,cart);resetEd();$('mkt').value='';$('mes').value=curMonth();renderCart();renderHist();show(2);
 };
-$('hist').onclick=function(e){var h=e.target.getAttribute('data-h');if(h&&confirm('Excluir esta compra?')){hist=hist.filter(function(x){return x.id!==h});save(KH,hist);renderHist()}};
+$('hist').onclick=function(e){var h=e.target.getAttribute('data-h');
+  if(h)twoStep(e.target,'h'+h,'Excluir compra',function(){hist=hist.filter(function(x){return x.id!==h});save(KH,hist);renderHist()})};
+$('hist').addEventListener('change',function(e){var m=e.target.getAttribute('data-m');
+  if(m&&e.target.value){hist.forEach(function(x){if(x.id===m)x.d=e.target.value+'-01T12:00:00'});save(KH,hist);renderHist()}});
+function curMonth(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')}
+$('mes').value=curMonth();
 function show(n){$('v1').hidden=n!==1;$('v2').hidden=n!==2;$('t1').className=n===1?'on':'';$('t2').className=n===2?'on':'';if(n===2)renderHist()}
+$('busca').oninput=renderItens;
 $('t1').onclick=function(){show(1)};$('t2').onclick=function(){show(2)};
 renderCart();renderHist();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
