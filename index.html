@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Compras do Mercado</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-title" content="Compras">
+<meta name="theme-color" content="#1f8a4c">
+<style>
+:root{--bg:#f6f7f4;--card:#fff;--tx:#1d2420;--mu:#6b7770;--ac:#1f8a4c;--ac2:#e6f4ec;--bd:#e1e5e0;--rd:#c0392b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121613;--card:#1c221e;--tx:#eaf0ec;--mu:#9aa69f;--ac:#3fbf78;--ac2:#1d3326;--bd:#2c352f;--rd:#ef6b5c}}
+:root[data-theme="dark"]{--bg:#121613;--card:#1c221e;--tx:#eaf0ec;--mu:#9aa69f;--ac:#3fbf78;--ac2:#1d3326;--bd:#2c352f;--rd:#ef6b5c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:14px 14px 90px}
+h1{font-size:20px;margin:6px 0 12px}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:none;color:var(--mu);padding:10px;border-radius:9px;font-size:15px;font-weight:600}
+.tabs button.on{background:var(--ac);color:#fff}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.total{text-align:center}
+.total small{color:var(--mu)}
+.total .v{font-size:38px;font-weight:800;color:var(--ac);letter-spacing:-1px}
+.row{display:flex;gap:8px;margin-bottom:8px}
+input{width:100%;font-size:17px;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)}
+input:focus{outline:2px solid var(--ac);border-color:transparent}
+.q{flex:0 0 28%}.p{flex:1}
+.btn{width:100%;border:0;background:var(--ac);color:#fff;font-size:17px;font-weight:700;padding:13px;border-radius:11px}
+.btn.sec{background:var(--ac2);color:var(--ac)}
+.btn.ghost{background:none;color:var(--rd);font-weight:600;font-size:14px;padding:8px}
+.item{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bd)}
+.item:last-child{border:0}
+.item .n{flex:1;min-width:0}
+.item .n b{display:block;overflow-wrap:anywhere}
+.item .n span{color:var(--mu);font-size:13px}
+.item .s{font-weight:700}
+.x{border:0;background:none;color:var(--rd);font-size:22px;padding:4px 8px}
+.empty{color:var(--mu);text-align:center;padding:14px 0}
+.mon{margin-bottom:14px}
+.mon .top{display:flex;justify-content:space-between;font-weight:600;margin-bottom:4px}
+.bar{height:12px;background:var(--ac2);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ac);border-radius:6px}
+.d{font-size:13px;margin-top:3px}
+.up{color:var(--rd)}.dn{color:var(--ac)}.mu{color:var(--mu)}
+details{border-bottom:1px solid var(--bd);padding:8px 0}
+details:last-child{border:0}
+summary{display:flex;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;font-weight:600}
+summary::-webkit-details-marker{display:none}
+.sub{color:var(--mu);font-size:14px;padding:6px 0 0}
+.sub div{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+h2{font-size:16px;margin:0 0 10px}
+</style>
+</head>
+<body>
+<main>
+<h1>🛒 Compras do Mercado</h1>
+<div class="tabs"><button id="t1" class="on">Compra atual</button><button id="t2">Histórico</button></div>
+
+<section id="v1">
+  <div class="card total"><small>Total até agora</small><div class="v" id="tot">R$ 0,00</div><small id="cnt">0 itens</small></div>
+  <div class="card">
+    <input id="nome" placeholder="Item (ex.: arroz)" autocomplete="off" style="margin-bottom:8px">
+    <div class="row">
+      <input id="qtd" class="q" inputmode="decimal" placeholder="Qtd" value="1">
+      <input id="prc" class="p" inputmode="decimal" placeholder="Valor unitário (R$)">
+    </div>
+    <button class="btn" id="add">+ Adicionar</button>
+  </div>
+  <div class="card" id="lista"></div>
+  <div class="card">
+    <input id="mkt" placeholder="Mercado (opcional)" style="margin-bottom:8px">
+    <button class="btn" id="fin">✔ Finalizar e salvar compra</button>
+    <button class="btn ghost" id="lim">Limpar lista</button>
+  </div>
+</section>
+
+<section id="v2" hidden>
+  <div class="card"><h2>Comparação por mês</h2><div id="meses"></div></div>
+  <div class="card"><h2>Compras salvas</h2><div id="hist"></div></div>
+</section>
+</main>
+
+<script>
+(function(){
+var KC='mercado_cart_v1',KH='mercado_hist_v1';
+function load(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):[]}catch(e){return []}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+var cart=load(KC),hist=load(KH);
+var $=function(id){return document.getElementById(id)};
+var brl=function(n){return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})};
+var num=function(s){var n=parseFloat(String(s).replace(/\./g,function(m,i,t){return t.indexOf(',')>-1?'':'.'}).replace(',','.'));return isNaN(n)?0:n};
+var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var sum=function(a){return a.reduce(function(t,i){return t+i.q*i.p},0)};
+var MN=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function mlabel(k){var p=k.split('-');return MN[+p[1]-1]+' de '+p[0]}
+
+function renderCart(){
+  $('tot').textContent=brl(sum(cart));
+  $('cnt').textContent=cart.length+(cart.length===1?' item':' itens');
+  $('lista').innerHTML=cart.length?cart.map(function(i,x){
+    return '<div class="item"><div class="n"><b>'+esc(i.n)+'</b><span>'+i.q+' × '+brl(i.p)+'</span></div><div class="s">'+brl(i.q*i.p)+'</div><button class="x" data-x="'+x+'" aria-label="Remover">×</button></div>';
+  }).reverse().join(''):'<div class="empty">Nenhum item ainda. Comece lançando abaixo ☝️</div>';
+}
+function renderHist(){
+  var by={};
+  hist.forEach(function(h){var k=h.d.slice(0,7);by[k]=by[k]||{t:0,n:0};by[k].t+=h.total;by[k].n++});
+  var ks=Object.keys(by).sort().reverse();
+  var max=Math.max.apply(null,ks.map(function(k){return by[k].t}).concat([1]));
+  $('meses').innerHTML=ks.length?ks.map(function(k,i){
+    var prev=ks[i+1],d='<span class="mu">primeiro mês registrado</span>';
+    if(prev){var df=by[k].t-by[prev].t,pc=by[prev].t?df/by[prev].t*100:0;
+      d='<span class="'+(df>0?'up':'dn')+'">'+(df>0?'▲ ':'▼ ')+brl(Math.abs(df))+' ('+Math.abs(pc).toFixed(1).replace('.',',')+'%)</span> <span class="mu">vs. '+mlabel(prev)+'</span>';
+      if(df===0)d='<span class="mu">igual ao mês anterior</span>';}
+    return '<div class="mon"><div class="top"><span>'+mlabel(k)+'</span><span>'+brl(by[k].t)+'</span></div><div class="bar"><i style="width:'+(by[k].t/max*100)+'%"></i></div><div class="d">'+by[k].n+(by[k].n===1?' compra · ':' compras · ')+d+'</div></div>';
+  }).join(''):'<div class="empty">Salve uma compra para ver a comparação.</div>';
+  $('hist').innerHTML=hist.length?hist.slice().reverse().map(function(h){
+    var id=h.id,dt=new Date(h.d).toLocaleDateString('pt-BR');
+    return '<details><summary><span>'+dt+(h.m?' · '+esc(h.m):'')+'</span><span>'+brl(h.total)+'</span></summary><div class="sub">'+
+      h.items.map(function(i){return '<div><span>'+esc(i.n)+' ('+i.q+'×'+brl(i.p)+')</span><span>'+brl(i.q*i.p)+'</span></div>'}).join('')+
+      '<button class="btn ghost" data-h="'+id+'">Excluir compra</button></div></details>';
+  }).join(''):'<div class="empty">Nenhuma compra salva ainda.</div>';
+}
+function add(){
+  var n=$('nome').value.trim(),q=num($('qtd').value),p=num($('prc').value);
+  if(!n||q<=0||p<=0){(!n?$('nome'):q<=0?$('qtd'):$('prc')).focus();return}
+  cart.push({n:n,q:q,p:p});save(KC,cart);
+  $('nome').value='';$('prc').value='';$('qtd').value='1';$('nome').focus();renderCart();
+}
+$('add').onclick=add;
+['nome','qtd','prc'].forEach(function(id){$(id).addEventListener('keydown',function(e){if(e.key==='Enter')add()})});
+$('lista').onclick=function(e){var x=e.target.getAttribute('data-x');if(x!==null){cart.splice(+x,1);save(KC,cart);renderCart()}};
+$('lim').onclick=function(){if(cart.length&&confirm('Limpar a lista atual?')){cart=[];save(KC,cart);renderCart()}};
+$('fin').onclick=function(){
+  if(!cart.length)return;
+  var now=new Date(),d=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T12:00:00';
+  hist.push({id:String(Date.now()),d:d,m:$('mkt').value.trim(),items:cart,total:sum(cart)});
+  save(KH,hist);cart=[];save(KC,cart);$('mkt').value='';renderCart();renderHist();show(2);
+};
+$('hist').onclick=function(e){var h=e.target.getAttribute('data-h');if(h&&confirm('Excluir esta compra?')){hist=hist.filter(function(x){return x.id!==h});save(KH,hist);renderHist()}};
+function show(n){$('v1').hidden=n!==1;$('v2').hidden=n!==2;$('t1').className=n===1?'on':'';$('t2').className=n===2?'on':'';if(n===2)renderHist()}
+$('t1').onclick=function(){show(1)};$('t2').onclick=function(){show(2)};
+renderCart();renderHist();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
+})();
+</script>
+</body>
+</html>
